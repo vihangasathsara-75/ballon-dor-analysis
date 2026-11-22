@@ -1,0 +1,43 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Data and outputs that should not be committed by default
+# (sample and documented datasets may still be added explicitly)
+*.pkl
+*.joblib
+
+# Coverage / testing / logs
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+*.log
