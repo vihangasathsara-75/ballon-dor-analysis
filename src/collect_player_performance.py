@@ -1,7 +1,12 @@
-"""Attempt to collect real player-season stats from FBref (Opta).
+"""Attempt to collect official player-season stats from FBref (Opta).
+
+This is not the default performance source. The analysis pipeline uses the
+compiled extract from kxnoun/ballondor-predictor (see
+``src/download_performance_data.py``). This script remains the planned
+collector for a first-party official extract if FBref becomes reachable.
 
 France Football voting records are collected separately. This script is the
-planned collector for individual performance features:
+planned collector for official individual performance features:
 
 - FBref (Opta) for goals, assists, minutes, appearances, position, and club
 - Transfermarkt for team trophies (not scraped here; see the notes below)

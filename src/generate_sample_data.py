@@ -1,8 +1,11 @@
 """Generate a clearly labelled SYNTHETIC player-performance sample.
 
+This script is **for tests only**. It is not the default performance
+source. The analysis pipeline uses the real compiled extract downloaded
+by ``src/download_performance_data.py``.
+
 This script does **not** scrape FBref or Transfermarkt and must not be
-treated as a source of historical statistics. It exists so the analysis
-pipeline can be developed while real official extracts are unavailable.
+treated as a source of historical statistics.
 
 Identifiers (year, player, club, nationality, Wikipedia position when
 present) are copied from ``data/raw/ballon_dor_voting.csv``. Every

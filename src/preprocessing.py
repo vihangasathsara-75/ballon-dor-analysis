@@ -9,9 +9,9 @@ from pathlib import Path
 import pandas as pd
 
 try:
-    from .data_loading import load_performance, load_voting
+    from .data_loading import DEFAULT_TOP_N, load_performance, load_voting
 except ImportError:
-    from data_loading import load_performance, load_voting
+    from data_loading import DEFAULT_TOP_N, load_performance, load_voting
 
 TEXT_COLUMNS = ("player", "club", "nationality", "position")
 
@@ -140,6 +140,13 @@ def merge_voting_and_performance(
     return merged
 
 
+def restrict_to_top_n(frame: pd.DataFrame, top_n: int = DEFAULT_TOP_N) -> pd.DataFrame:
+    """Keep finishers ranked 1..N in each year (default: top 15)."""
+    if "rank" not in frame.columns:
+        raise ValueError("Cannot restrict to top N without a rank column")
+    return frame.loc[frame["rank"] <= top_n].copy()
+
+
 def add_derived_columns(frame: pd.DataFrame) -> pd.DataFrame:
     """Add rank- and scale-aware columns used in later analysis."""
     out = frame.copy()
@@ -166,11 +173,15 @@ def build_analysis_dataset(
     voting_path: str | Path | None = None,
     performance_path: str | Path | None = None,
     column_map: dict[str, str] | None = None,
+    top_n: int | None = DEFAULT_TOP_N,
 ) -> pd.DataFrame:
     """Load, clean, merge, and enrich the analysis table.
 
-    ``performance_path`` is configurable so a real extract can replace
-    the SYNTHETIC sample without changing this function's callers.
+    The default analysis set is the top 15 finishers in each award year,
+    joined to the compiled performance extract. Year-standardised point
+    columns are computed after that filter, so they describe the top-15
+    set only. Pass ``top_n=None`` to keep every voting row. The SYNTHETIC
+    sample remains available for tests via ``performance_path``.
     """
     voting = clean_voting(load_voting(voting_path))
     performance = clean_performance(
@@ -178,6 +189,8 @@ def build_analysis_dataset(
     )
     merged = merge_voting_and_performance(voting, performance)
     merged = handle_missing_positions(merged)
+    if top_n is not None:
+        merged = restrict_to_top_n(merged, top_n=top_n)
     return add_derived_columns(merged)
 
 
@@ -205,4 +218,65 @@ def summarise_dataset(dataset: pd.DataFrame) -> str:
     if "data_label" in dataset.columns:
         labels = dataset["data_label"].fillna("(none)").value_counts().to_dict()
         lines.append(f"  data_label counts: {labels}")
+    rows_per_year = dataset.groupby("year").size().to_dict()
+    lines.append(f"  rows per year: {rows_per_year}")
+    missingness_metrics = [
+        "minutes",
+        "appearances",
+        "wins",
+        "draws",
+        "losses",
+        "goals",
+        "assists",
+        "penalty_goals",
+        "shots",
+        "shots_on_target",
+        "interceptions",
+        "tackles",
+        "xg",
+        "xag",
+        "sca",
+        "gca",
+    ]
+    present = [column for column in missingness_metrics if column in dataset.columns]
+    if present:
+        lines.append("  missing values by year (field metrics):")
+        years = sorted(dataset["year"].unique())
+        header = "    metric".ljust(22) + "".join(f"{year:>6}" for year in years)
+        lines.append(header)
+        for column in present:
+            counts = []
+            for year in years:
+                subset = dataset.loc[dataset["year"] == year, column]
+                counts.append(int(subset.isna().sum()))
+            row = f"    {column}".ljust(22) + "".join(f"{count:>6}" for count in counts)
+            lines.append(row)
+    keeper_metrics = [
+        "shots_on_target_against",
+        "goals_against",
+        "saves",
+        "save_percentage",
+        "clean_sheets",
+    ]
+    present_keepers = [column for column in keeper_metrics if column in dataset.columns]
+    if present_keepers:
+        if "is_goalkeeper" in dataset.columns:
+            keepers = dataset[pd.to_numeric(dataset["is_goalkeeper"], errors="coerce").fillna(0).ne(0)]
+        elif "position" in dataset.columns:
+            keepers = dataset[dataset["position"].astype("string").str.contains("GK|Goalkeeper", case=False, na=False)]
+        else:
+            keepers = dataset.iloc[0:0]
+        lines.append(f"  goalkeeper rows: {len(keepers)}")
+        if len(keepers):
+            lines.append("  missing values among goalkeepers by year:")
+            years = sorted(keepers["year"].unique())
+            header = "    metric".ljust(28) + "".join(f"{year:>6}" for year in years)
+            lines.append(header)
+            for column in present_keepers:
+                counts = []
+                for year in years:
+                    subset = keepers.loc[keepers["year"] == year, column]
+                    counts.append(int(subset.isna().sum()) if len(subset) else 0)
+                row = f"    {column}".ljust(28) + "".join(f"{count:>6}" for count in counts)
+                lines.append(row)
     return "\n".join(lines)

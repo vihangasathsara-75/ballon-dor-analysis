@@ -34,19 +34,40 @@ Re-run the validator after refreshing the voting file. Any mismatch should be re
 
 ## Player performance data
 
-Real player-season statistics were **not** added in this commit.
+The default analysis uses a **real compiled extract** of player-season statistics, narrowed to the **top 15 finishers in each award year** (2016–2019 and 2021–2024: 120 rows). Every one of those 120 rows is an exact `year` + player-name match to the voting table. The merged dataset is therefore all real (`is_synthetic` is False). Year-standardised voting columns (`points_share`, `points_year_z`, `points_year_minmax`) are computed on this top-15 set.
 
-`src/collect_player_performance.py` is the planned collector for official performance features. It requests FBref (Opta) "Big 5 European Leagues" standard player-stats tables, with source URLs, for seasons overlapping 2016–2024. Transfermarkt is the planned source for team trophies, but those pages are not scraped by the script yet. On 23 November 2026, FBref returned HTTP 403 for the Big 5 pages (and the site home page), so no official performance file was written. The script does not invent replacement numbers.
+### Source and licensing
 
-Until a complete official extract is available, the pipeline uses a **clearly labelled SYNTHETIC sample**:
+The extract is taken from the public project [kxnoun/ballondor-predictor](https://github.com/kxnoun/ballondor-predictor), file `data/final_combined_stats.csv` ([raw URL](https://raw.githubusercontent.com/kxnoun/ballondor-predictor/main/data/final_combined_stats.csv)).
 
-- `data/sample/synthetic_player_season_stats.csv` — one row per nominee (240 rows). The filename, `data_label` column, and `source` column all say SYNTHETIC.
+That repository **states no license** and **does not name the original statistics source**. Column names and the `W-D-L` `Result` field resemble FBref (Opta), but that origin is not confirmed here. Treat the file as a third-party compilation, not as an official FBref or Transfermarkt dump.
+
+### How the file is obtained
+
+`src/download_performance_data.py` downloads the CSV at runtime, keeps only the analysis years, and writes `data/external/player_performance.csv`. That folder is gitignored; **do not commit the CSV**. `src/data_loading.py` uses this path by default and will run the download if the file is missing.
+
+`Min` is parsed from a comma-thousands string into numeric minutes. `Result` (`W-D-L`) is parsed into `wins`, `draws`, and `losses`; appearances are the sum of those three.
+
+### Missing metrics
+
+Where a metric is clearly unavailable, placeholder zeros are treated as missing (`NaN`), not as true zeros. In this extract, `xG`, `xAG`, `SCA`, and `GCA` are 0.0 for every top-15 player in **2016 and 2017**, so those four metrics are recoded to missing for those two years. From 2018 they have genuine variation and zeros are left as recorded (for example a goalkeeper with no expected goals).
+
+The extract has no playing-position column, so positions in the merged table come only from the Wikipedia voting table; many top-15 rows therefore have `position` missing.
+
+The extract does **not** lack `Sh`, `SoT`, `Int`, or `Tkl` in 2016–2017: those columns contain real-looking non-zero values for outfield players and are kept. Goalkeeper-only fields (`SoTA`, `GA`, `Saves`, `Save%`, `CS`) are populated for goalkeepers and are missing for outfield players, as expected.
+
+`src/collect_player_performance.py` remains the planned collector for official FBref (Opta) tables. On 23 November 2026 those pages returned HTTP 403, so this project does not yet have a first-party official extract.
+
+### SYNTHETIC sample (tests only)
+
+The labelled SYNTHETIC sample is **no longer the default**. It is kept only so the pipeline can be tested without the download:
+
+- `data/sample/synthetic_player_season_stats.csv` — 240 nominee rows. The filename, `data_label`, and `source` all say SYNTHETIC.
 - Rebuild it with `python src/generate_sample_data.py` (fixed seed 42).
-
-Identifiers (`year`, `player`, `club`, `nationality`) are copied from the voting table. `position` is copied from Wikipedia when that table listed one, or propagated from another Wikipedia year for the same player; otherwise it is left blank (`position_source` records this). All of `appearances`, `minutes`, `goals`, `assists`, and the trophy flags are simulated. They must not be mixed into the voting file or presented as FBref or Transfermarkt figures.
-
-To replace the sample later, collect official FBref/Transfermarkt (or equivalent) stats into `data/raw/player_performance.csv` with source URLs, then join to the voting table on `year` and `player`. Keep any remaining synthetic rows in `data/sample/` only.
+- Point the loader at it with `--performance-path` or `PERFORMANCE_PATH`. Do not mix these simulated figures into the voting file or present them as real statistics.
 
 ## Licensing note
 
 Voting ranks and points originate with France Football. The structured tables in this repository were collected from Wikipedia and should be treated as a CC BY-SA reuse of that structured copy, with links back to the Wikipedia year pages and, where checked, to the official announcements used for validation.
+
+The player-performance extract is downloaded from [kxnoun/ballondor-predictor](https://github.com/kxnoun/ballondor-predictor), which states no license. It is not committed in this repository.
